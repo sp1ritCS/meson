@@ -3478,6 +3478,13 @@ class Interpreter(InterpreterBase, HoldableObject):
         target = targetclass(name, self.subdir, self.subproject, for_machine, srcs, struct, objs,
                              self.environment, self.compilers[for_machine], kwargs)
 
+        if isinstance(target, build.Executable):
+            if target.android_usecase == 'application':
+                df = DependencyFallbacksHolder(self, ['android:application'])
+                dep = df.lookup({}, force_fallback=True)
+                target.add_deps(dep)
+
+
         self.add_target(name, target)
         self.project_args_frozen = True
         return target
