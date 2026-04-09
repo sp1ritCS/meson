@@ -788,10 +788,33 @@ class GnomeModule(ExtensionModule):
             b.devenv.append(self.devenv)
 
     def _get_gir_dep(self, state: 'ModuleState') -> T.Tuple[Dependency, Program, Program]:
-        if not self.gir_dep:
+        if self.gir_dep is not None:
+            return self.gir_dep, self.giscanner, self.gicompiler
+
+        def legacy_gir_lookup() -> T.Tuple[Dependency, Program, Program]:
             self.gir_dep = state.dependency('gobject-introspection-1.0')
             self.giscanner = self._find_tool(state, 'g-ir-scanner')
             self.gicompiler = self._find_tool(state, 'g-ir-compiler')
+            return self.gir_dep, self.giscanner, self.gicompiler
+
+        if self.giscanner is None:
+            self.giscanner = state.find_program('gi-generate-repository', required=False)
+        if self.gicompiler is None:
+            self.gicompiler = state.find_program('gi-compile-repository', required=False)
+        if not self.giscanner.found() or not self.gicompiler.found():
+            return legacy_gir_lookup()
+
+        if state.project_name == 'glib':
+            # GLib itself is special cased, as its gnome.generate_gir invocations
+            # are complete enough to not need gobject-introspection / gi-base. The
+            # need to special case them exists, as the result of the generate_gir
+            # invocations end up as gi-base-1.0, so it isn't defined yet.
+            return InternalDependency(
+              self.giscanner.get_version(),
+              [], [], [], [], [], [], [], [], {}, [], [], [],
+              'gi-base-1.0'), self.giscanner, self.gicompiler
+
+        self.gir_dep = state.dependency('gi-base-1.0')
         return self.gir_dep, self.giscanner, self.gicompiler
 
     def _giscanner_version_compare(self, state: 'ModuleState', cmp: str) -> bool:
